@@ -1,6 +1,6 @@
 (ns bluebin.core
   (import [io.netty.util Recycler]
-          [clojure.lang ILookup Associative MapEntry Seqable Counted IPersistentCollection]
+          [clojure.lang ILookup Associative MapEntry Seqable Counted IPersistentCollection Sequential Indexed Reversible IPersistentStack IPersistentVector]
           [java.io Writer]))
 
 (defprotocol Recyclable
@@ -183,3 +183,187 @@
          [m#] ()
          (let [kws# [~@(map ->keyword fields)]]
            (apply ~(symbol (str '-> type-name)) (map (fn [k#] (get m# k#)) kws#)))))))
+
+(declare ^:private mk-RecyclableTinyVector)
+(def ^:private RecyclableTinyVector-recycler
+  (proxy [Recycler] [8192]
+    (newObject [handle]
+      (mk-RecyclableTinyVector handle))))
+
+(deftype RecyclableTinyVector [num-items elements handle in-use]
+  "A recyclable, \"tiny\" vector.
+
+  These vectors have up to eight items, but can be recycled to
+  re-use the containing instance. "
+  IPersistentVector
+  (length [_]
+    (dosync
+      (if (deref in-use)
+        (deref num-items)
+        (throw (IllegalStateException. "recycled object")))))
+
+  (assocN [_ i v]
+    (dosync
+      (if (deref in-use)
+        (let [ret (vec (map deref (take (deref num-items) elements)))]
+          (assoc ret i v))
+        (throw (IllegalStateException. "recycled object")))))
+
+  (cons [_ o]
+    (dosync
+      (if (deref in-use)
+        (cons (vec (map deref (take (deref num-items) elements))) o)
+        (throw (IllegalStateException. "recycled object")))))
+
+  Associative
+  (containsKey [_ k]
+    (dosync
+      (if (deref in-use)
+        (and (integer? k) (<= 0 k (deref num-items))))
+      (throw (IllegalStateException. "recycled object"))))
+
+  (assoc [this k v]
+    (.assocN this k v))
+
+  IPersistentCollection
+  (empty [this]
+    (when (zero? (.length this))
+      this))
+
+  Seqable
+  (seq [_]
+    (dosync
+      (if (deref in-use)
+        (seq (map deref (take (deref num-items) elements)))
+        (throw (IllegalStateException. "recycled object")))))
+
+  ILookup
+  (valAt [_ k not-found]
+    (dosync
+      (if (deref in-use)
+        (if (and (integer? k) (<= 0 k (deref num-items)))
+          (deref (nth elements k))
+          not-found)
+        (throw (IllegalStateException. "recycled object")))))
+
+  (valAt [this k] (.valAt this k nil))
+
+  IPersistentStack
+  (peek [this] (get this 0))
+
+  (pop [this]
+    (drop 1 (seq this)))
+
+  Reversible
+  (rseq [this] (reverse (seq this)))
+
+  Indexed
+  (nth [this i not-found] (.valAt this i not-found))
+
+  (nth [this i] (.valAt this i nil))
+
+  Counted
+  (count [this] (.length this))
+
+  Sequential
+
+  Recyclable
+  (recycle! [this]
+    (let [recycle? (ref false)
+          recycle0 (ref nil)
+          recycle1 (ref nil)
+          recycle2 (ref nil)
+          recycle3 (ref nil)
+          recycle4 (ref nil)
+          recycle5 (ref nil)
+          recycle6 (ref nil)
+          recycle7 (ref nil)]
+      (dosync
+        (if (deref in-use)
+          (do
+            (when (and (> (deref num-items) 0)
+                       (satisfies? Recyclable (deref (aget elements 0))))
+              (ref-set recycle0 (deref (aget elements 0))))
+            (when (and (> (deref num-items) 1)
+                       (satisfies? Recyclable (deref (aget elements 0))))
+              (ref-set recycle1 (deref (aget elements 1))))
+            (when (and (> (deref num-items) 2)
+                       (satisfies? Recyclable (deref (aget elements 0))))
+              (ref-set recycle2 (deref (aget elements 2))))
+            (when (and (> (deref num-items) 3)
+                       (satisfies? Recyclable (deref (aget elements 0))))
+              (ref-set recycle3 (deref (aget elements 3))))
+            (when (and (> (deref num-items) 4)
+                       (satisfies? Recyclable (deref (aget elements 0))))
+              (ref-set recycle4 (deref (aget elements 4))))
+            (when (and (> (deref num-items) 5)
+                       (satisfies? Recyclable (deref (aget elements 0))))
+              (ref-set recycle5 (deref (aget elements 5))))
+            (when (and (> (deref num-items) 6)
+                       (satisfies? Recyclable (deref (aget elements 0))))
+              (ref-set recycle6 (deref (aget elements 6))))
+            (when (and (> (deref num-items) 7)
+                       (satisfies? Recyclable (deref (aget elements 0))))
+              (ref-set recycle7 (deref (aget elements 7))))
+            (ref-set (aget elements 0) nil)
+            (ref-set (aget elements 1) nil)
+            (ref-set (aget elements 2) nil)
+            (ref-set (aget elements 3) nil)
+            (ref-set (aget elements 4) nil)
+            (ref-set (aget elements 5) nil)
+            (ref-set (aget elements 6) nil)
+            (ref-set (aget elements 7) nil)
+            (ref-set num-items 0)
+            (ref-set in-use false)
+            (ref-set recycle? true))))
+      (when recycle?
+        (when (some? (deref recycle0))
+          (recycle! (deref recycle0))))
+      (when recycle?
+        (when (some? (deref recycle1))
+          (recycle! (deref recycle1))))
+      (when recycle?
+        (when (some? (deref recycle2))
+          (recycle! (deref recycle2))))
+      (when recycle?
+        (when (some? (deref recycle3))
+          (recycle! (deref recycle3))))
+      (when recycle?
+        (when (some? (deref recycle4))
+          (recycle! (deref recycle4))))
+      (when recycle?
+        (when (some? (deref recycle5))
+          (recycle! (deref recycle5))))
+      (when recycle?
+        (when (some? (deref recycle6))
+          (recycle! (deref recycle6))))
+      (when recycle?
+        (when (some? (deref recycle7))
+          (recycle! (deref recycle7)))))))
+
+(defmacro gen->rec-vec
+  []
+  (let [syms ['a 'b 'c 'd 'e 'f 'g 'h]
+        v (gensym "v")]
+    `(defn ->rec-vec
+       ~@(map (fn [i]
+                `([~@(take i syms)]
+                   (let [~v (.get RecyclableTinyVector-recycler)]
+                     (dosync
+                       (if (false? (deref (.in_use ~v)))
+                         (do
+                           (ref-set (.num_items ~v) ~i)
+                           ~@(map-indexed (fn [j s] `(ref-set (nth (.elements ~v) ~j) ~s))
+                                          (take i syms))
+                           (ref-set (.in_use ~v) true)
+                           ~v)
+                         (throw (IllegalStateException. "object is in use")))))))
+              (range 9))
+       ([~@syms & more#]
+         (vec (concat [~@syms] more#))))))
+
+(gen->rec-vec)
+
+(defn- mk-RecyclableTinyVector
+  [handle]
+  (RecyclableTinyVector. (ref 0) (repeatedly 8 #(ref nil)) handle (ref false)))
