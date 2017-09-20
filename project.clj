@@ -1,4 +1,4 @@
-(defproject com.github.csm/bluebin "0.1.0-SNAPSHOT"
+(defproject com.github.csm/bluebin "0.1.0"
   :description "Recyclable record types."
   :url "https://github.com/csm/bluebin"
   :license {:name "Eclipse Public License"
