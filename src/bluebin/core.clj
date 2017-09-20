@@ -102,7 +102,7 @@
            (dosync
              (if (deref active#)
                (->> nil
-                    ~@(map (fn [f] `(cons (MapEntry. ~(->keyword f) (deref ~f)))) fields))
+                    ~@(map (fn [f] `(cons (MapEntry. ~(->keyword f) (deref ~f)))) (reverse fields)))
                (throw (IllegalStateException. "recycled object")))))
 
          Counted
@@ -190,11 +190,13 @@
     (newObject [handle]
       (mk-RecyclableTinyVector handle))))
 
-(deftype RecyclableTinyVector [num-items elements handle in-use]
-  "A recyclable, \"tiny\" vector.
+(deftype
+  ^{:doc "A recyclable, \"tiny\" vector.
 
   These vectors have up to eight items, but can be recycled to
-  re-use the containing instance. "
+  re-use the containing instance."}
+  RecyclableTinyVector [num-items elements handle in-use]
+
   IPersistentVector
   (length [_]
     (dosync
@@ -260,7 +262,13 @@
   Indexed
   (nth [this i not-found] (.valAt this i not-found))
 
-  (nth [this i] (.valAt this i nil))
+  (nth [this i]
+    (dosync
+      (if (deref in-use)
+        (if (and (<= 0 i) (< i (deref num-items)))
+          (.valAt this i nil)
+          (throw (IndexOutOfBoundsException.)))
+        (throw (IllegalStateException. "recycled object")))))
 
   Counted
   (count [this] (.length this))
@@ -366,4 +374,4 @@
 
 (defn- mk-RecyclableTinyVector
   [handle]
-  (RecyclableTinyVector. (ref 0) (repeatedly 8 #(ref nil)) handle (ref false)))
+  (RecyclableTinyVector. (ref 0) (into-array (repeatedly 8 #(ref nil))) handle (ref false)))
