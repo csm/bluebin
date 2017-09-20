@@ -14,6 +14,12 @@ may break or be incomplete, this library may
 
 ## Usage
 
+Released via [clojars](https://clojars.org/com.github.csm/bluebin):
+
+```clojure
+[com.github.csm/bluebin "0.1.0"]
+```
+
 ```clojure
 (require 'bluebin.core)
 
