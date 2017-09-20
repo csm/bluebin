@@ -1,5 +1,7 @@
 # bluebin
 
+[![Clojars Project](https://img.shields.io/clojars/v/com.github.csm/bluebin.svg)](https://clojars.org/com.github.csm/bluebin) [![travis](https://travis-ci.org/csm/bluebin.svg?branch=master)](https://travis-ci.org/csm/bluebin)
+
 A workalike for `defrecord` but which produces a *recyclable* object,
 using Netty's [`Recycler`](https://netty.io/4.1/api/io/netty/util/Recycler.html)
 class.
